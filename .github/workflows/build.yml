@@ -1,0 +1,67 @@
+name: Build
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Build Docker image
+        run: docker build -t bootloader-builder .
+
+      - name: Write .env.local from vars
+        env:
+          VITE_CONFIG_URL: ${{ vars.VITE_CONFIG_URL }}
+          VITE_PUBLIC_KEYS: ${{ vars.VITE_PUBLIC_KEYS }}
+        run: printenv | grep '^VITE_' > .env.local
+
+      - name: Build bootloader
+        run: |
+          mkdir -p dist
+          docker run --rm \
+            -v "${{ github.workspace }}/.env.local:/app/.env.local:ro" \
+            -v "${{ github.workspace }}/dist:/app/dist" \
+            bootloader-builder
+
+      - name: SHA-256
+        run: sha256sum dist/index.html
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: dist/index.html
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: index.html
+          path: dist/index.html
+          if-no-files-found: error
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - name: Deploy to GCS
+        env:
+          GCS_BUCKET: ${{ vars.GCS_BUCKET }}
+          GCS_OBJECT: ${{ vars.GCS_OBJECT }}
+          GCS_CREDENTIALS: ${{ secrets.GCS_CREDENTIALS }}
+          SKIP_BUILD: "1"
+        run: |
+          npm install
+          node scripts/deploy.mjs | tee /tmp/deploy.log
+          URL=$(grep -oP 'https://\S+' /tmp/deploy.log | tail -1)
+          echo "## Deployed" >> $GITHUB_STEP_SUMMARY
+          echo "$URL" >> $GITHUB_STEP_SUMMARY

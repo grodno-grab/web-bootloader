@@ -1,0 +1,26 @@
+{
+  "name": "web-bootloader",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "vite build",
+    "start": "vite",
+    "test": "vitest run",
+    "keygen": "node scripts/keygen.mjs",
+    "sign": "node scripts/sign.mjs",
+    "deploy": "node scripts/deploy.mjs"
+  },
+  "dependencies": {
+    "@noble/post-quantum": "^0.2.1",
+    "preact": "^10.26.1"
+  },
+  "devDependencies": {
+    "@google-cloud/storage": "^7.19.0",
+    "@preact/preset-vite": "2.9.4",
+    "dotenv": "^17.4.0",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.1",
+    "vite-plugin-singlefile": "^2.3.0",
+    "vitest": "^4.1.2"
+  }
+}

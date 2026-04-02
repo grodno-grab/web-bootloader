@@ -1,0 +1,11 @@
+{
+  "url": "https://your-immutable-url/page.html",
+  "urlSignatures": [
+    "<base64-encoded ML-DSA-65 signature of the URL bytes, from signer 1>",
+    "<base64-encoded ML-DSA-65 signature of the URL bytes, from signer 2>"
+  ],
+  "contentSignatures": [
+    "<base64-encoded ML-DSA-65 signature of the HTML bytes, from signer 1>",
+    "<base64-encoded ML-DSA-65 signature of the HTML bytes, from signer 2>"
+  ]
+}

@@ -1,0 +1,57 @@
+import { describe, it, expect } from 'vitest';
+import { verifySignature, base64ToBytes } from './crypto';
+
+// Real ML-DSA-65 test vector generated with @noble/post-quantum
+const TEST_PUBLIC_KEY =
+  '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';
+
+const TEST_SIGNATURE =
+  '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';
+
+const TEST_MESSAGE = 'hello world';
+
+describe('base64ToBytes', () => {
+  it('decodes standard base64', () => {
+    const bytes = base64ToBytes('aGVsbG8=');
+    expect(new TextDecoder().decode(bytes)).toBe('hello');
+  });
+
+  it('handles URL-safe base64 (- and _)', () => {
+    // Standard: +/   URL-safe: -_
+    const std = base64ToBytes('a+b/cA==');
+    const urlSafe = base64ToBytes('a-b_cA==');
+    expect(std).toEqual(urlSafe);
+  });
+
+  it('trims whitespace', () => {
+    const bytes = base64ToBytes('  aGVsbG8=  \n');
+    expect(new TextDecoder().decode(bytes)).toBe('hello');
+  });
+});
+
+describe('verifySignature', () => {
+  it('returns true for valid key/sig/message', () => {
+    const message = new TextEncoder().encode(TEST_MESSAGE);
+    expect(verifySignature(TEST_PUBLIC_KEY, TEST_SIGNATURE, message)).toBe(true);
+  });
+
+  it('returns false for tampered message', () => {
+    const message = new TextEncoder().encode(TEST_MESSAGE + '!');
+    expect(verifySignature(TEST_PUBLIC_KEY, TEST_SIGNATURE, message)).toBe(false);
+  });
+
+  it('returns false (not throws) for malformed base64 key', () => {
+    const message = new TextEncoder().encode(TEST_MESSAGE);
+    expect(verifySignature('not-valid-key', TEST_SIGNATURE, message)).toBe(false);
+  });
+
+  it('returns false (not throws) for malformed base64 signature', () => {
+    const message = new TextEncoder().encode(TEST_MESSAGE);
+    expect(verifySignature(TEST_PUBLIC_KEY, 'not-valid-sig', message)).toBe(false);
+  });
+
+  it('returns false (not throws) for empty inputs', () => {
+    const message = new TextEncoder().encode('');
+    expect(verifySignature('', '', message)).toBe(false);
+  });
+});
