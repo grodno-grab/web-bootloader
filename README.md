@@ -75,6 +75,53 @@ checking build provenance — and then sign exactly those bytes.
 
 The order of keys must match the order of public keys in `VITE_PUBLIC_KEYS`.
 
+### Signers who hold their own key
+
+When the private keys live with different people, nobody has to hand a key over. Each signer signs
+the same URL separately and sends back their `config.json`; the release manager then merges the
+signature arrays into one file:
+
+```json
+{
+  "url": "…same url everyone signed…",
+  "contentSize": 37729,
+  "urlSignatures": ["<alice>", "<bob>"],
+  "contentSignatures": ["<alice>", "<bob>"]
+}
+```
+
+**Both arrays must list signatures in the same order as the keys in `VITE_PUBLIC_KEYS`** — the
+bootloader checks `signatures[i]` against `keys[i]`, so a swapped pair fails verification even though
+every individual signature is valid. It fails closed: the page refuses to load rather than loading
+unverified content, so a merge mistake costs a retry, not a compromise.
+
+Every signer must sign the exact same URL string, character for character, and `contentSize` must
+match the page they signed.
+
+### Signing without a local Node.js
+
+A signer only needs Docker. The image carries the dependencies but not `scripts/`, so mount those
+from the checkout, and mount an **empty** directory as the working directory — mounting the
+repository itself would expose an existing `.keys/` to the container.
+
+```bash
+git clone https://github.com/grodno-grab/web-bootloader.git
+cd web-bootloader && docker build -t web-bootloader .
+REPO=$(pwd)
+
+mkdir -p ~/signing && cd ~/signing
+
+# Generate a key pair once. The public half is printed — publish it somewhere verifiable.
+docker run --rm --user "$(id -u):$(id -g)" \
+  -v "$REPO/scripts:/app/scripts:ro" -v "$(pwd):/work" -w /work \
+  web-bootloader node /app/scripts/keygen.mjs alice
+
+# Sign a release; config.json lands in the working directory
+docker run --rm --user "$(id -u):$(id -g)" \
+  -v "$REPO/scripts:/app/scripts:ro" -v "$(pwd):/work" -w /work \
+  web-bootloader node /app/scripts/sign.mjs --url https://your-immutable-url/page.html
+```
+
 ## Cryptography
 
 Algorithm: **ML-DSA-65** (CRYSTALS-Dilithium level 3, NIST FIPS 204).
@@ -158,6 +205,25 @@ curl -fsSL https://YOUR_HOSTED_URL | sha256sum
 ```
 
 All three hashes must match. Any discrepancy means either the source code, env variables, Node.js version, or the hosted file differs from what was built.
+
+### Verifying a hosted boot page without the project's `.env.local`
+
+Anyone can check that a published boot page was built from this repository, without access to any
+private file. `.env` here holds placeholders, so pass the real values as environment variables — both
+are public and readable in the hosted page itself: the config URL and the `|`-separated public keys.
+
+```bash
+docker build -q -t bootloader-builder .
+docker run --rm \
+  -e VITE_CONFIG_URL="https://your-config-url/config.json" \
+  -e VITE_PUBLIC_KEYS="<key1>|<key2>" \
+  -v "$(pwd)/dist:/app/dist" bootloader-builder
+diff <(curl -fsSL "https://your-hosted-boot-page") dist/index.html && echo identical
+```
+
+Environment variables take precedence over `.env`, so this rebuilds exactly what CI produced. The
+same check should be repeated after every change to the signer set, since adding or removing a key
+changes the built page.
 
 ## Development
 
