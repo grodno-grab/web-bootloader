@@ -94,6 +94,29 @@ The merge also refuses to write anything if the signers signed different URLs or
 or if the same key signed twice. Without `--pubkeys` those structural checks still run, but the key
 order is not verified.
 
+### Changing the set of signers
+
+Adding or removing a key changes both the built boot page and the shape of every future
+`config.json`, and the two must be switched together. A boot page requires **exactly** as many
+signatures as it has keys built in, so a config signed by two people is rejected by a boot page that
+knows one key, and vice versa. The order below keeps a working page live throughout:
+
+1. The new signer generates a key pair and publishes the public half somewhere others can check it
+   against — the point of a second signer is lost if nobody can tell whose key it is.
+2. Add the key to `VITE_PUBLIC_KEYS` (locally in `.env.local`, in CI as a repository variable) and
+   build. This produces a **new** boot page at a new immutable URL; the old one keeps running on the
+   old config.
+3. Every signer signs the release page, and the configs are combined with `--merge` in the same order
+   as the keys. Do not publish it yet.
+4. Publish the merged `config.json` and switch the link people use to the new boot page.
+
+Step 4 is the cut-over: the moment the merged config goes live, the **previous boot page stops
+working** — it counts a different number of signatures. Anyone still holding the old link gets the
+error screen, not stale content, so nothing unverified is ever shown, but the link has to be replaced
+wherever it was published.
+
+After the set is settled, each release only needs step 3.
+
 ### Signing without a local Node.js
 
 A signer only needs Docker. The image carries the dependencies but not `scripts/`, so mount those
