@@ -80,7 +80,7 @@ What is signed:
 
 ### Docker (recommended)
 
-The canonical build uses Docker to guarantee a reproducible environment. The image pins Node.js to an exact version; `npm install --ignore-scripts` installs all packages.
+The canonical build uses Docker to guarantee a reproducible environment. The image pins Node.js to an exact version; `npm ci --ignore-scripts` installs all packages exactly as pinned in `package-lock.json`.
 
 ```bash
 # Build the image once (no secrets inside)
@@ -97,7 +97,7 @@ docker run --rm \
 ### Local (development only)
 
 ```bash
-npm install
+npm ci
 npm run build        # reads .env + .env.local
 ```
 
