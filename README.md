@@ -78,25 +78,21 @@ The order of keys must match the order of public keys in `VITE_PUBLIC_KEYS`.
 ### Signers who hold their own key
 
 When the private keys live with different people, nobody has to hand a key over. Each signer signs
-the same URL separately and sends back their `config.json`; the release manager then merges the
-signature arrays into one file:
+the same URL separately and sends back their `config.json`; the release manager combines them:
 
-```json
-{
-  "url": "…same url everyone signed…",
-  "contentSize": 37729,
-  "urlSignatures": ["<alice>", "<bob>"],
-  "contentSignatures": ["<alice>", "<bob>"]
-}
+```bash
+npm run sign -- --merge alice.json,bob.json --pubkeys "$VITE_PUBLIC_KEYS"
 ```
 
-**Both arrays must list signatures in the same order as the keys in `VITE_PUBLIC_KEYS`** — the
-bootloader checks `signatures[i]` against `keys[i]`, so a swapped pair fails verification even though
-every individual signature is valid. It fails closed: the page refuses to load rather than loading
-unverified content, so a merge mistake costs a retry, not a compromise.
+**Configs must be listed in the same order as the keys in `VITE_PUBLIC_KEYS`** — the bootloader
+checks `signatures[i]` against `keys[i]`, so a swapped pair fails verification even though every
+individual signature is valid. Passing `--pubkeys` makes the merge verify itself exactly as the
+bootloader will, and a wrong order is reported together with the order that does work, instead of
+surfacing later as a page that refuses to load.
 
-Every signer must sign the exact same URL string, character for character, and `contentSize` must
-match the page they signed.
+The merge also refuses to write anything if the signers signed different URLs or different content,
+or if the same key signed twice. Without `--pubkeys` those structural checks still run, but the key
+order is not verified.
 
 ### Signing without a local Node.js
 
