@@ -1,5 +1,6 @@
 {
   "url": "https://your-immutable-url/page.html",
+  "contentSize": 37729,
   "urlSignatures": [
     "<base64-encoded ML-DSA-65 signature of the URL bytes, from signer 1>",
     "<base64-encoded ML-DSA-65 signature of the URL bytes, from signer 2>"

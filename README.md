@@ -4,7 +4,7 @@ A cryptographically verified web page loader. It fetches a JSON config from a UR
 
 ## How it works
 
-1. Fetches `VITE_CONFIG_URL` → JSON `{ "url": "...", "urlSignatures": ["...", "..."], "contentSignatures": ["...", "..."] }`
+1. Fetches `VITE_CONFIG_URL` → JSON `{ "url": "...", "contentSize": 37729, "urlSignatures": ["...", "..."], "contentSignatures": ["...", "..."] }` (`contentSize` is optional and only drives the progress indicator)
 2. Verifies every ML-DSA-65 `urlSignatures[i]` against the UTF-8 bytes of `url` (count must match configured keys)
 3. Fetches the page from `url`
 4. Verifies every ML-DSA-65 `contentSignatures[i]` against the raw HTML bytes
@@ -61,9 +61,17 @@ npm run sign -- --url https://your-immutable-url/page.html
 
 # Or specify keys explicitly
 npm run sign -- --url https://your-immutable-url/page.html --keys .keys/alice.key,.keys/bob.key
+
+# Sign bytes that were already fetched and checked, and refuse to sign anything else
+npm run sign -- --url https://your-immutable-url/page.html --file page.html --sha256 <hash-from-the-build>
 ```
 
 This fetches the live page, signs both the URL and the content, and writes `config.json` (gitignored) — publish it to `VITE_CONFIG_URL`.
+
+`--sha256` compares the page against the hash printed by the build before anything is signed, so a
+release can never be signed under the wrong URL or after the hosted object changed. `--file` signs a
+local copy instead of re-downloading, which lets the caller validate the bytes first — for example by
+checking build provenance — and then sign exactly those bytes.
 
 The order of keys must match the order of public keys in `VITE_PUBLIC_KEYS`.
 
@@ -91,7 +99,7 @@ docker run --rm \
   -v "$(pwd)/.env.local:/app/.env.local:ro" \
   -v "$(pwd)/dist:/app/dist" \
   bootloader-builder
-# output: dist/index.html (~33 KB)
+# output: dist/index.html (~37 KB)
 ```
 
 ### Local (development only)
@@ -123,7 +131,7 @@ The repository includes `.github/workflows/build.yml`. On every push to `master`
 | `GCS_OBJECT` | Variable | Object path within the bucket |
 | `GCS_CREDENTIALS` | Secret | JSON service-account key with write access |
 
-`VITE_*` variables are stored as **Variables** (not Secrets) because they end up embedded in the public build output anyway. Secret keys used for signing are never stored in GitHub — signing is done locally with `npm run sign`.
+`VITE_*` variables are stored as **Variables** (not Secrets) because they end up embedded in the public build output anyway. No signing key is stored in this repository's CI — its workflow only builds and deploys, and `npm run sign` is run by hand. A project that automates signing in its own workflow keeps the key in that project's secrets, and should pass `--file`/`--sha256` so the key is only ever used on bytes that were checked first.
 
 All three `GCS_*` settings must be configured; if any is missing the deploy step fails the workflow.
 
@@ -166,4 +174,4 @@ In dev mode the app will try to fetch from the configured `VITE_CONFIG_URL`. Set
 | Preact | ~4 KB |
 | @noble/post-quantum (ml-dsa65 only) | ~22 KB |
 | App + i18n | ~3 KB |
-| **Total (minified, inlined)** | **~33 KB** |
+| **Total (minified, inlined)** | **~37 KB** (~17 KB gzipped) |
