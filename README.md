@@ -54,19 +54,21 @@ VITE_PUBLIC_KEYS=<contents of .keys/alice.pub>|<contents of .keys/bob.pub>
 ## Signing a release
 
 After publishing the page to its immutable URL, fetch and sign it to produce `config.json` for `VITE_CONFIG_URL`.
+The full procedure for a release is [Checking the bytes before signing](#checking-the-bytes-before-signing);
+the forms of the command are:
 
 ```bash
-# Uses all *.key files from .keys/ automatically
+# Signs whatever the address serves at that moment — nothing ties it to a build anyone examined
 npm run sign -- --url https://your-immutable-url/page.html
 
-# Or specify keys explicitly
+# Same, with the keys named explicitly instead of taking every *.key in .keys/
 npm run sign -- --url https://your-immutable-url/page.html --keys .keys/alice.key,.keys/bob.key
 
-# Sign bytes that were already fetched and checked, and refuse to sign anything else
+# Signs bytes that were already fetched and checked, and refuses to sign anything else
 npm run sign -- --url https://your-immutable-url/page.html --file page.html --sha256 <hash-from-the-build>
 ```
 
-This fetches the live page, signs both the URL and the content, and writes `config.json` (gitignored) — publish it to `VITE_CONFIG_URL`.
+Each form signs both the URL and the content and writes `config.json` (gitignored) — publish it to `VITE_CONFIG_URL`.
 
 `--sha256` compares the page against the hash printed by the build before anything is signed, so a
 release can never be signed under the wrong URL or after the hosted object changed. `--file` signs a
@@ -75,10 +77,41 @@ checking build provenance — and then sign exactly those bytes.
 
 The order of keys must match the order of public keys in `VITE_PUBLIC_KEYS`.
 
+### Checking the bytes before signing
+
+A signature means *someone checked these bytes*, not *these bytes exist*. Signing an address alone
+proves nothing about what was signed — whoever can write to the storage can put any file at a
+plausible address. Take the address **and** the SHA-256 from the same build run, and check the bytes
+against that build before the key is ever used:
+
+```bash
+# 1. Fetch the candidate yourself
+curl -fsSL "<immutable URL from the build summary>" -o page.html
+
+# 2. Tie the bytes to the source they claim to come from — not to the address they arrived at
+gh attestation verify page.html --repo <repository that builds the application being loaded>
+
+# 3. Sign exactly those bytes; a hash mismatch aborts before any private key is read
+npm run sign -- --url "<the same immutable URL>" --file page.html --sha256 "<hash from that build run>"
+```
+
+When the application is built in a public repository, step 2 needs nothing: anyone can run it and see
+which source revision produced these exact bytes. `gh attestation verify` also takes `--owner`
+instead of `--repo`, which is the form to use when the same build is mirrored under more than one
+repository name.
+
+Only a private building repository makes read access a prerequisite. Without that access the
+provenance cannot be checked at all, and `--sha256` then merely shows that the hosted object still
+matches a hash somebody sent you — it says nothing about where that hash came from. A signer in that
+position should say so out loud rather than let the signature imply a check that did not happen.
+
 ### Signers who hold their own key
 
-When the private keys live with different people, nobody has to hand a key over. Each signer signs
-the same URL separately and sends back their `config.json`; the release manager combines them:
+When the private keys live with different people, nobody has to hand a key over. Each signer checks
+the bytes themselves as above and signs the same URL separately, then sends back their `config.json`;
+the release manager combines them. A second signature is worth having only if the second person
+actually looked — two signatures over a download nobody inspected are one unchecked release signed
+twice.
 
 ```bash
 npm run sign -- --merge alice.json,bob.json --pubkeys "$VITE_PUBLIC_KEYS"
@@ -135,11 +168,18 @@ docker run --rm --user "$(id -u):$(id -g)" \
   -v "$REPO/scripts:/app/scripts:ro" -v "$(pwd):/work" -w /work \
   web-bootloader node /app/scripts/keygen.mjs alice
 
-# Sign a release; config.json lands in the working directory
+# Fetch and check the candidate on the host, exactly as in "Checking the bytes before signing"
+curl -fsSL "<immutable URL from the build summary>" -o page.html
+gh attestation verify page.html --repo <repository that builds the application being loaded>
+
+# Sign the checked bytes; config.json lands in the working directory
 docker run --rm --user "$(id -u):$(id -g)" \
   -v "$REPO/scripts:/app/scripts:ro" -v "$(pwd):/work" -w /work \
-  web-bootloader node /app/scripts/sign.mjs --url https://your-immutable-url/page.html
+  web-bootloader node /app/scripts/sign.mjs \
+    --url "<the same immutable URL>" --file page.html --sha256 "<hash from that build run>"
 ```
+
+`page.html` must sit in the mounted working directory, next to where `config.json` will be written.
 
 ## Cryptography
 
